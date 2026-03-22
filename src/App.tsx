@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GraphCanvas } from "./components/graph-canvas";
 import { GraphSearch } from "./components/graph-search";
+import { GraphToolbar } from "./components/graph-toolbar";
 import { NodeDetailPanel } from "./components/node-detail-panel";
 import { PromptPanel } from "./components/prompt-panel";
 import { ReplayControls } from "./components/replay-controls";
@@ -34,6 +35,7 @@ export function App() {
 	const [collapsedNodeIds, setCollapsedNodeIds] = useState<Set<string>>(
 		new Set(),
 	);
+	const [layoutMode, setLayoutMode] = useState<"force" | "tree">("force");
 	const svgElRef = useRef<SVGSVGElement | null>(null);
 	const { state, events, start, cancel } = useOllamaStream();
 	const sessions = useSessions();
@@ -213,8 +215,16 @@ export function App() {
 		return () => window.removeEventListener("keydown", handler);
 	}, []);
 
-	// toggleCollapse will be used in Session 10 for double-click collapse
-	void collapsedNodeIds; // suppress unused warning until wired to UI
+	const collapseAll = useCallback(() => {
+		const claimIds = displayGraphState.nodes
+			.filter((n) => n.type === "claim")
+			.map((n) => n.id);
+		setCollapsedNodeIds(new Set(claimIds));
+	}, [displayGraphState.nodes]);
+
+	const expandAll = useCallback(() => {
+		setCollapsedNodeIds(new Set());
+	}, []);
 
 	return (
 		<div className="flex h-screen flex-col bg-neutral-950 text-neutral-100">
@@ -298,12 +308,24 @@ export function App() {
 				<main className="relative flex-1">
 					<GraphCanvas
 						graphState={visibleGraphState}
+						layoutMode={layoutMode}
 						onSvgRef={(el) => {
 							svgElRef.current = el;
 						}}
 						highlightedNodeIds={highlightedNodeIds}
 						onNodeClick={setSelectedNodeId}
 					/>
+
+					{/* Graph toolbar */}
+					{displayGraphState.nodes.length > 0 && (
+						<GraphToolbar
+							layoutMode={layoutMode}
+							onLayoutChange={setLayoutMode}
+							onCollapseAll={collapseAll}
+							onExpandAll={expandAll}
+							collapsedCount={collapsedNodeIds.size}
+						/>
+					)}
 
 					{/* Graph search */}
 					{displayGraphState.nodes.length > 0 && (
