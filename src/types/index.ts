@@ -51,6 +51,83 @@ export interface StreamStatus {
 	message: string;
 }
 
+// Session persistence
+export interface Session {
+	id: string;
+	createdAt: number;
+	model: string;
+	prompt: string;
+	temperature: number;
+	eventLog: ReasoningEvent[];
+	stats: SessionStats;
+}
+
+export interface SessionStats {
+	nodeCount: number;
+	claimCount: number;
+	evidenceCount: number;
+	backtrackCount: number;
+	conclusionCount: number;
+	thinkingTokens: number;
+	durationMs: number;
+}
+
+export interface SessionSummary {
+	id: string;
+	createdAt: number;
+	model: string;
+	prompt: string;
+	stats: SessionStats;
+}
+
+export function computeStats(eventLog: ReasoningEvent[]): SessionStats {
+	let claimCount = 0;
+	let evidenceCount = 0;
+	let backtrackCount = 0;
+	let conclusionCount = 0;
+	let thinkingTokens = 0;
+
+	for (const event of eventLog) {
+		switch (event.type) {
+			case "claim":
+				claimCount++;
+				break;
+			case "evidence":
+				evidenceCount++;
+				break;
+			case "backtrack":
+				backtrackCount++;
+				break;
+			case "conclusion":
+				conclusionCount++;
+				break;
+			default:
+				break;
+		}
+		if (event.type !== "think-start" && event.type !== "think-end") {
+			thinkingTokens++;
+		}
+	}
+
+	const nodeCount =
+		claimCount + evidenceCount + backtrackCount + conclusionCount;
+	const timestamps = eventLog.map((e) => e.timestamp);
+	const durationMs =
+		timestamps.length > 1
+			? Math.max(...timestamps) - Math.min(...timestamps)
+			: 0;
+
+	return {
+		nodeCount,
+		claimCount,
+		evidenceCount,
+		backtrackCount,
+		conclusionCount,
+		thinkingTokens,
+		durationMs,
+	};
+}
+
 // Node visual config
 export const NODE_COLORS: Record<ReasoningEventType, string> = {
 	claim: "#3B82F6",
