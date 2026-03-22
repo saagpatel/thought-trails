@@ -1,25 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { GraphCanvas } from "./components/graph-canvas";
 import { StatusBar } from "./components/status-bar";
 import { useOllamaStream } from "./hooks/use-ollama-stream";
+import { addEvent } from "./lib/graph-builder";
 import { listOllamaModels } from "./lib/ollama-client";
-import type { ReasoningEventType } from "./types";
+import type { GraphState, ReasoningEventType } from "./types";
 import { NODE_COLORS } from "./types";
 
-const TYPE_LABELS: Record<ReasoningEventType, string> = {
-	claim: "Claim",
-	evidence: "Evidence",
-	backtrack: "Backtrack",
-	conclusion: "Conclusion",
-	"think-start": "Think Start",
-	"think-end": "Think End",
-};
+const EMPTY_GRAPH: GraphState = { nodes: [], edges: [], eventLog: [] };
 
 export function App() {
 	const [prompt, setPrompt] = useState("");
 	const [models, setModels] = useState<string[]>([]);
 	const [selectedModel, setSelectedModel] = useState("");
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
-	const eventsEndRef = useRef<HTMLDivElement>(null);
 	const { state, events, start, cancel } = useOllamaStream();
 
 	useEffect(() => {
@@ -32,11 +26,6 @@ export function App() {
 				/* StatusBar handles error display */
 			});
 	}, []);
-
-	// Auto-scroll to latest event
-	useEffect(() => {
-		eventsEndRef.current?.scrollIntoView({ behavior: "smooth" });
-	}, [events.length]);
 
 	const handleSubmit = useCallback(() => {
 		if (!prompt.trim() || !selectedModel || state === "streaming") return;
@@ -53,27 +42,33 @@ export function App() {
 		[handleSubmit],
 	);
 
+	// Build graph state from events
+	const graphState = useMemo(() => {
+		let gs = EMPTY_GRAPH;
+		for (const event of events) {
+			gs = addEvent(event, gs);
+		}
+		return gs;
+	}, [events]);
+
 	// Count events by type (exclude think-start/think-end)
 	const typeCounts = useMemo(() => {
 		const counts: Partial<Record<ReasoningEventType, number>> = {};
-		for (const event of events) {
-			if (event.type === "think-start" || event.type === "think-end") continue;
-			counts[event.type] = (counts[event.type] ?? 0) + 1;
+		for (const node of graphState.nodes) {
+			counts[node.type] = (counts[node.type] ?? 0) + 1;
 		}
 		return counts;
-	}, [events]);
+	}, [graphState.nodes]);
 
-	const contentEvents = useMemo(
-		() =>
-			events.filter((e) => e.type !== "think-start" && e.type !== "think-end"),
-		[events],
-	);
+	const nodeCount = graphState.nodes.length;
+	const showWarning = nodeCount >= 150;
+	const atLimit = nodeCount >= 200;
 
 	return (
 		<div className="flex h-screen flex-col bg-neutral-950 text-neutral-100">
 			{/* Prompt input */}
-			<div className="shrink-0 border-b border-neutral-800 p-4">
-				<div className="mx-auto flex max-w-3xl gap-3">
+			<div className="shrink-0 border-b border-neutral-800 p-3">
+				<div className="mx-auto flex max-w-4xl gap-3">
 					<select
 						value={selectedModel}
 						onChange={(e) => setSelectedModel(e.target.value)}
@@ -91,7 +86,7 @@ export function App() {
 						onChange={(e) => setPrompt(e.target.value)}
 						onKeyDown={handleKeyDown}
 						placeholder="Enter a prompt... (Cmd+Enter to submit)"
-						rows={2}
+						rows={1}
 						className="flex-1 resize-none rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 focus:border-blue-500 focus:outline-none"
 					/>
 					{state === "streaming" ? (
@@ -115,79 +110,56 @@ export function App() {
 				</div>
 			</div>
 
-			{/* Event display */}
-			<main className="flex-1 overflow-auto p-4">
-				<div className="mx-auto max-w-3xl">
-					{/* Status bar */}
-					{state !== "idle" && (
-						<div className="mb-4 flex flex-wrap items-center gap-3 text-xs">
-							<span className="text-neutral-500">
-								State: <strong className="text-neutral-300">{state}</strong>
-							</span>
-							<span className="text-neutral-500">
-								Events: {contentEvents.length}
-							</span>
-							{Object.entries(typeCounts).map(([type_, count]) => (
-								<span
-									key={type_}
-									className="inline-flex items-center gap-1 rounded-full px-2 py-0.5"
-									style={{
-										backgroundColor: `${NODE_COLORS[type_ as ReasoningEventType]}20`,
-										color: NODE_COLORS[type_ as ReasoningEventType],
-									}}
-								>
-									<span
-										className="inline-block h-1.5 w-1.5 rounded-full"
-										style={{
-											backgroundColor: NODE_COLORS[type_ as ReasoningEventType],
-										}}
-									/>
-									{count} {TYPE_LABELS[type_ as ReasoningEventType]}
-								</span>
-							))}
-						</div>
-					)}
+			{/* Graph area */}
+			<main className="relative flex-1">
+				<GraphCanvas graphState={graphState} />
 
-					{/* Event list */}
-					{contentEvents.map((event) => (
-						<div
-							key={event.id}
-							className="mb-2 flex gap-3 rounded border border-neutral-800/50 p-3"
-						>
+				{/* Floating overlay: node count badges */}
+				{nodeCount > 0 && (
+					<div className="absolute bottom-12 left-4 flex flex-wrap items-center gap-2 text-xs">
+						<span className="rounded bg-neutral-900/80 px-2 py-1 text-neutral-400 backdrop-blur">
+							{nodeCount} nodes
+						</span>
+						{Object.entries(typeCounts).map(([type_, count]) => (
 							<span
-								className="mt-0.5 inline-block h-3 w-3 shrink-0 rounded-full"
-								style={{ backgroundColor: NODE_COLORS[event.type] }}
-								title={TYPE_LABELS[event.type]}
-							/>
-							<div className="min-w-0 flex-1">
-								<div className="mb-1 flex items-center gap-2 text-xs text-neutral-500">
-									<span
-										className="font-bold uppercase tracking-wider"
-										style={{ color: NODE_COLORS[event.type] }}
-									>
-										{TYPE_LABELS[event.type]}
-									</span>
-									{event.parentId && (
-										<span className="text-neutral-600">
-											parent: {event.parentId.slice(0, 8)}
-										</span>
-									)}
-								</div>
-								<p className="text-sm leading-relaxed text-neutral-300">
-									{event.text}
-								</p>
-							</div>
-						</div>
-					))}
+								key={type_}
+								className="inline-flex items-center gap-1 rounded-full bg-neutral-900/80 px-2 py-0.5 backdrop-blur"
+								style={{
+									color: NODE_COLORS[type_ as ReasoningEventType],
+								}}
+							>
+								<span
+									className="inline-block h-1.5 w-1.5 rounded-full"
+									style={{
+										backgroundColor: NODE_COLORS[type_ as ReasoningEventType],
+									}}
+								/>
+								{count}
+							</span>
+						))}
+					</div>
+				)}
 
-					{state === "idle" && contentEvents.length === 0 && (
-						<p className="text-center text-neutral-600">
-							Enter a prompt above to start streaming
+				{/* Idle state hint */}
+				{state === "idle" && nodeCount === 0 && (
+					<div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+						<p className="text-neutral-600">
+							Enter a prompt above to visualize reasoning
 						</p>
-					)}
+					</div>
+				)}
 
-					<div ref={eventsEndRef} />
-				</div>
+				{/* Warning toasts */}
+				{showWarning && !atLimit && (
+					<div className="absolute right-4 top-4 rounded border border-amber-500/30 bg-amber-900/80 px-4 py-2 text-sm text-amber-200 backdrop-blur">
+						Approaching display limit ({nodeCount}/200 nodes)
+					</div>
+				)}
+				{atLimit && (
+					<div className="absolute right-4 top-4 rounded border border-red-500/30 bg-red-900/80 px-4 py-2 text-sm text-red-200 backdrop-blur">
+						Display limit reached — graph capped at 200 nodes
+					</div>
+				)}
 			</main>
 
 			<StatusBar />
