@@ -12,7 +12,7 @@ const EDGE_COLORS: Record<GraphEdge["type"], string> = {
 export function useGraphSimulation(
 	graphState: GraphState,
 	containerRef: React.RefObject<HTMLDivElement | null>,
-): void {
+): { svgRef: React.RefObject<SVGSVGElement | null> } {
 	const svgRef = useRef<SVGSVGElement | null>(null);
 	const simulationRef = useRef<d3.Simulation<
 		GraphNode,
@@ -284,6 +284,8 @@ export function useGraphSimulation(
 			.text((d) => truncate(d.text, 40));
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [graphState.nodes.length, graphState.edges.length]);
+
+	return { svgRef };
 }
 
 // --- Helpers ---

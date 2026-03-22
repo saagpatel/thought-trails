@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GraphCanvas } from "./components/graph-canvas";
+import { ReplayControls } from "./components/replay-controls";
 import { StatusBar } from "./components/status-bar";
 import { useOllamaStream } from "./hooks/use-ollama-stream";
+import { useReplay } from "./hooks/use-replay";
+import { exportJson, exportSvg } from "./lib/exporter";
 import { addEvent } from "./lib/graph-builder";
 import { listOllamaModels } from "./lib/ollama-client";
 import type { GraphState, ReasoningEventType } from "./types";
@@ -14,6 +17,7 @@ export function App() {
 	const [models, setModels] = useState<string[]>([]);
 	const [selectedModel, setSelectedModel] = useState("");
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
+	const svgElRef = useRef<SVGSVGElement | null>(null);
 	const { state, events, start, cancel } = useOllamaStream();
 
 	useEffect(() => {
@@ -42,8 +46,8 @@ export function App() {
 		[handleSubmit],
 	);
 
-	// Build graph state from events
-	const graphState = useMemo(() => {
+	// Build full graph state from live events
+	const liveGraphState = useMemo(() => {
 		let gs = EMPTY_GRAPH;
 		for (const event of events) {
 			gs = addEvent(event, gs);
@@ -51,18 +55,54 @@ export function App() {
 		return gs;
 	}, [events]);
 
-	// Count events by type (exclude think-start/think-end)
+	// Replay hook — operates on the full event log
+	const replay = useReplay(liveGraphState.eventLog);
+	const isReplaying = replay.replayState !== "idle";
+
+	// When replaying, build graph from replay events; otherwise use live
+	const displayGraphState = useMemo(() => {
+		if (!isReplaying) return liveGraphState;
+		let gs = EMPTY_GRAPH;
+		for (const event of replay.replayEvents) {
+			gs = addEvent(event, gs);
+		}
+		return gs;
+	}, [isReplaying, liveGraphState, replay.replayEvents]);
+
+	// Count nodes by type
 	const typeCounts = useMemo(() => {
 		const counts: Partial<Record<ReasoningEventType, number>> = {};
-		for (const node of graphState.nodes) {
+		for (const node of displayGraphState.nodes) {
 			counts[node.type] = (counts[node.type] ?? 0) + 1;
 		}
 		return counts;
-	}, [graphState.nodes]);
+	}, [displayGraphState.nodes]);
 
-	const nodeCount = graphState.nodes.length;
+	const nodeCount = displayGraphState.nodes.length;
 	const showWarning = nodeCount >= 150;
 	const atLimit = nodeCount >= 200;
+	const canExport = nodeCount > 0 && state !== "streaming";
+	const canReplay = state === "complete" && liveGraphState.eventLog.length > 0;
+
+	// Export handlers
+	const handleExportSvg = useCallback(() => {
+		if (!svgElRef.current) return;
+		const ts = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
+		exportSvg(svgElRef.current, `thought-trails-${ts}.svg`);
+	}, []);
+
+	const handleExportJson = useCallback(() => {
+		const ts = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
+		exportJson(
+			displayGraphState,
+			{
+				model: selectedModel,
+				prompt,
+				timestamp: Date.now(),
+			},
+			`thought-trails-${ts}.json`,
+		);
+	}, [displayGraphState, selectedModel, prompt]);
 
 	return (
 		<div className="flex h-screen flex-col bg-neutral-950 text-neutral-100">
@@ -112,7 +152,12 @@ export function App() {
 
 			{/* Graph area */}
 			<main className="relative flex-1">
-				<GraphCanvas graphState={graphState} />
+				<GraphCanvas
+					graphState={displayGraphState}
+					onSvgRef={(el) => {
+						svgElRef.current = el;
+					}}
+				/>
 
 				{/* Floating overlay: node count badges */}
 				{nodeCount > 0 && (
@@ -140,9 +185,29 @@ export function App() {
 					</div>
 				)}
 
+				{/* Export buttons */}
+				{canExport && (
+					<div className="absolute right-4 bottom-12 flex gap-2">
+						<button
+							type="button"
+							onClick={handleExportSvg}
+							className="rounded border border-neutral-700 bg-neutral-900/80 px-3 py-1.5 text-xs text-neutral-300 backdrop-blur transition-colors hover:border-neutral-600 hover:text-neutral-100"
+						>
+							Export SVG
+						</button>
+						<button
+							type="button"
+							onClick={handleExportJson}
+							className="rounded border border-neutral-700 bg-neutral-900/80 px-3 py-1.5 text-xs text-neutral-300 backdrop-blur transition-colors hover:border-neutral-600 hover:text-neutral-100"
+						>
+							Export JSON
+						</button>
+					</div>
+				)}
+
 				{/* Idle state hint */}
 				{state === "idle" && nodeCount === 0 && (
-					<div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+					<div className="pointer-events-none absolute inset-0 flex items-center justify-center">
 						<p className="text-neutral-600">
 							Enter a prompt above to visualize reasoning
 						</p>
@@ -159,6 +224,22 @@ export function App() {
 					<div className="absolute right-4 top-4 rounded border border-red-500/30 bg-red-900/80 px-4 py-2 text-sm text-red-200 backdrop-blur">
 						Display limit reached — graph capped at 200 nodes
 					</div>
+				)}
+
+				{/* Replay controls */}
+				{canReplay && (
+					<ReplayControls
+						replayState={replay.replayState}
+						replaySpeed={replay.replaySpeed}
+						replayProgress={replay.replayProgress}
+						totalEvents={replay.totalEventCount}
+						currentEvents={replay.currentEventCount}
+						onPlay={replay.play}
+						onPause={replay.pause}
+						onReset={replay.reset}
+						onScrub={replay.scrub}
+						onCycleSpeed={replay.cycleSpeed}
+					/>
 				)}
 			</main>
 
