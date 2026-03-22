@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ComparisonPrompt } from "./components/comparison-prompt";
+import { ComparisonView } from "./components/comparison-view";
 import { GraphCanvas } from "./components/graph-canvas";
 import { GraphSearch } from "./components/graph-search";
 import { GraphToolbar } from "./components/graph-toolbar";
@@ -16,10 +18,12 @@ import { exportJson, exportSvg } from "./lib/exporter";
 import { addEvent, filterCollapsed, getSubtree } from "./lib/graph-builder";
 import { listOllamaModels } from "./lib/ollama-client";
 import type {
+	ComparisonConfig,
 	GraphNode,
 	GraphState,
 	ReasoningEventType,
 	Session,
+	ViewMode,
 } from "./types";
 import { computeStats, NODE_COLORS } from "./types";
 
@@ -36,6 +40,9 @@ export function App() {
 		new Set(),
 	);
 	const [layoutMode, setLayoutMode] = useState<"force" | "tree">("force");
+	const [viewMode, setViewMode] = useState<ViewMode>("single");
+	const [comparisonConfig, setComparisonConfig] =
+		useState<ComparisonConfig | null>(null);
 	const svgElRef = useRef<SVGSVGElement | null>(null);
 	const { state, events, start, cancel } = useOllamaStream();
 	const sessions = useSessions();
@@ -226,6 +233,44 @@ export function App() {
 		setCollapsedNodeIds(new Set());
 	}, []);
 
+	// Comparison mode
+	if (viewMode === "compare") {
+		return (
+			<div className="flex h-screen flex-col bg-neutral-950 text-neutral-100">
+				<div className="flex shrink-0 items-start gap-3 border-b border-neutral-800">
+					<div className="flex items-center py-4 pl-3">
+						<WindowControls />
+					</div>
+					<div className="flex-1">
+						{comparisonConfig ? (
+							<div />
+						) : (
+							<ComparisonPrompt
+								models={models}
+								onCompare={(config) => setComparisonConfig(config)}
+								onBack={() => {
+									setViewMode("single");
+									setComparisonConfig(null);
+								}}
+							/>
+						)}
+					</div>
+				</div>
+				{comparisonConfig ? (
+					<ComparisonView
+						config={comparisonConfig}
+						onBack={() => {
+							setViewMode("single");
+							setComparisonConfig(null);
+						}}
+					/>
+				) : null}
+				<StatusBar />
+			</div>
+		);
+	}
+
+	// Single mode (default)
 	return (
 		<div className="flex h-screen flex-col bg-neutral-950 text-neutral-100">
 			{/* Window controls + Prompt panel */}
@@ -243,6 +288,14 @@ export function App() {
 							<rect x="1" y="7" width="14" height="1.5" rx="0.5" />
 							<rect x="1" y="11" width="14" height="1.5" rx="0.5" />
 						</svg>
+					</button>
+					<button
+						type="button"
+						onClick={() => setViewMode("compare")}
+						className="rounded border border-neutral-700 px-2 py-1 text-[10px] text-neutral-500 transition-colors hover:border-neutral-600 hover:text-neutral-300"
+						title="Compare two models"
+					>
+						Compare
 					</button>
 				</div>
 				<div className="flex-1">

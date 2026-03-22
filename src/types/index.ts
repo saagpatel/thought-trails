@@ -146,3 +146,13 @@ export const NODE_RADII: Record<ReasoningEventType, number> = {
 	"think-start": 6,
 	"think-end": 6,
 };
+
+// Comparison mode
+export type ViewMode = "single" | "compare";
+
+export interface ComparisonConfig {
+	modelA: string;
+	modelB: string;
+	prompt: string;
+	temperature: number;
+}
