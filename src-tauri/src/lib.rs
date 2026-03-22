@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 mod commands;
@@ -8,7 +9,7 @@ mod types;
 
 pub fn run() {
     tauri::Builder::default()
-        .manage(commands::ollama::ActiveStream(Arc::new(Mutex::new(None))))
+        .manage(commands::ollama::ActiveStreams(Arc::new(Mutex::new(HashMap::new()))))
         .invoke_handler(tauri::generate_handler![
             commands::ollama::list_ollama_models,
             commands::ollama::check_ollama_health,

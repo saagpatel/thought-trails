@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use tauri::Emitter;
@@ -7,7 +8,7 @@ use crate::cot_parser::CotParser;
 use crate::ollama;
 use crate::types::{StreamState, StreamStatus};
 
-pub struct ActiveStream(pub Arc<Mutex<Option<CancellationToken>>>);
+pub struct ActiveStreams(pub Arc<Mutex<HashMap<String, CancellationToken>>>);
 
 #[tauri::command]
 pub async fn list_ollama_models() -> Result<Vec<String>, String> {
@@ -22,14 +23,17 @@ pub async fn check_ollama_health() -> Result<bool, String> {
 #[tauri::command]
 pub async fn start_reasoning_stream(
     app: tauri::AppHandle,
-    state: tauri::State<'_, ActiveStream>,
+    state: tauri::State<'_, ActiveStreams>,
     model: String,
     prompt: String,
     temperature: Option<f64>,
+    stream_id: Option<String>,
 ) -> Result<(), String> {
-    // Cancel any existing stream
+    let sid = stream_id.unwrap_or_else(|| "default".into());
+
+    // Cancel existing stream with this ID (if any)
     if let Ok(mut guard) = state.0.lock() {
-        if let Some(token) = guard.take() {
+        if let Some(token) = guard.remove(&sid) {
             token.cancel();
         }
     }
@@ -37,7 +41,7 @@ pub async fn start_reasoning_stream(
     let cancel_token = CancellationToken::new();
     {
         let mut guard = state.0.lock().map_err(|e| format!("Lock error: {e}"))?;
-        *guard = Some(cancel_token.clone());
+        guard.insert(sid.clone(), cancel_token.clone());
     }
 
     let mut rx = ollama::generate_stream(model, prompt, temperature).await?;
@@ -46,14 +50,17 @@ pub async fn start_reasoning_stream(
         let mut parser = CotParser::new();
         let mut thinking_finished = false;
 
+        let event_name = format!("reasoning-event-{sid}");
+        let complete_name = format!("stream-complete-{sid}");
+        let error_name = format!("stream-error-{sid}");
+
         loop {
             tokio::select! {
                 _ = cancel_token.cancelled() => {
-                    // Flush any buffered parser state before cancelling
                     for event in parser.finish() {
-                        let _ = app.emit("reasoning-event", &event);
+                        let _ = app.emit(&event_name, &event);
                     }
-                    let _ = app.emit("stream-complete", StreamStatus {
+                    let _ = app.emit(&complete_name, StreamStatus {
                         state: StreamState::Cancelled,
                         message: "Stream cancelled by user".into(),
                     });
@@ -62,33 +69,31 @@ pub async fn start_reasoning_stream(
                 chunk = rx.recv() => {
                     match chunk {
                         Some(Ok(c)) => {
-                            // Feed thinking tokens to parser
                             if let Some(ref thinking) = c.thinking {
                                 if !thinking.is_empty() {
                                     for event in parser.feed_thinking(thinking) {
-                                        let _ = app.emit("reasoning-event", &event);
+                                        let _ = app.emit(&event_name, &event);
                                     }
                                 }
                             }
 
-                            // Transition: first response token ends thinking phase
                             if !c.response.is_empty() {
                                 if !thinking_finished {
                                     for event in parser.finish_thinking() {
-                                        let _ = app.emit("reasoning-event", &event);
+                                        let _ = app.emit(&event_name, &event);
                                     }
                                     thinking_finished = true;
                                 }
                                 for event in parser.feed_response(&c.response) {
-                                    let _ = app.emit("reasoning-event", &event);
+                                    let _ = app.emit(&event_name, &event);
                                 }
                             }
 
                             if c.done {
                                 for event in parser.finish() {
-                                    let _ = app.emit("reasoning-event", &event);
+                                    let _ = app.emit(&event_name, &event);
                                 }
-                                let _ = app.emit("stream-complete", StreamStatus {
+                                let _ = app.emit(&complete_name, StreamStatus {
                                     state: StreamState::Complete,
                                     message: "done".into(),
                                 });
@@ -96,7 +101,7 @@ pub async fn start_reasoning_stream(
                             }
                         }
                         Some(Err(e)) => {
-                            let _ = app.emit("stream-error", StreamStatus {
+                            let _ = app.emit(&error_name, StreamStatus {
                                 state: StreamState::Error,
                                 message: e,
                             });
@@ -104,9 +109,9 @@ pub async fn start_reasoning_stream(
                         }
                         None => {
                             for event in parser.finish() {
-                                let _ = app.emit("reasoning-event", &event);
+                                let _ = app.emit(&event_name, &event);
                             }
-                            let _ = app.emit("stream-complete", StreamStatus {
+                            let _ = app.emit(&complete_name, StreamStatus {
                                 state: StreamState::Complete,
                                 message: "Stream ended".into(),
                             });
@@ -123,10 +128,12 @@ pub async fn start_reasoning_stream(
 
 #[tauri::command]
 pub async fn cancel_stream(
-    state: tauri::State<'_, ActiveStream>,
+    state: tauri::State<'_, ActiveStreams>,
+    stream_id: Option<String>,
 ) -> Result<(), String> {
+    let sid = stream_id.unwrap_or_else(|| "default".into());
     let mut guard = state.0.lock().map_err(|e| format!("Lock error: {e}"))?;
-    if let Some(token) = guard.take() {
+    if let Some(token) = guard.remove(&sid) {
         token.cancel();
     }
     Ok(())

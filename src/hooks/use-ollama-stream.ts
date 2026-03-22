@@ -6,7 +6,7 @@ import type { ReasoningEvent, StreamStatus } from "../types";
 
 type StreamingState = "idle" | "streaming" | "complete" | "error" | "cancelled";
 
-export function useOllamaStream() {
+export function useOllamaStream(streamId = "default") {
 	const [state, setState] = useState<StreamingState>("idle");
 	const [events, setEvents] = useState<ReasoningEvent[]>([]);
 	const unlistenRefs = useRef<UnlistenFn[]>([]);
@@ -16,19 +16,17 @@ export function useOllamaStream() {
 
 		async function setupListeners() {
 			const unlistenEvent = await listen<ReasoningEvent>(
-				"reasoning-event",
+				`reasoning-event-${streamId}`,
 				(event) => {
 					if (cancelled) return;
-					console.log("[reasoning-event]", event.payload);
 					setEvents((prev) => [...prev, event.payload]);
 				},
 			);
 
 			const unlistenComplete = await listen<StreamStatus>(
-				"stream-complete",
+				`stream-complete-${streamId}`,
 				(event) => {
 					if (cancelled) return;
-					console.log("[stream-complete]", event.payload);
 					setState(
 						event.payload.state === "cancelled" ? "cancelled" : "complete",
 					);
@@ -36,10 +34,10 @@ export function useOllamaStream() {
 			);
 
 			const unlistenError = await listen<StreamStatus>(
-				"stream-error",
+				`stream-error-${streamId}`,
 				(event) => {
 					if (cancelled) return;
-					console.error("[stream-error]", event.payload);
+					console.error(`[stream-error-${streamId}]`, event.payload);
 					setState("error");
 				},
 			);
@@ -62,29 +60,29 @@ export function useOllamaStream() {
 			}
 			unlistenRefs.current = [];
 		};
-	}, []);
+	}, [streamId]);
 
 	const start = useCallback(
 		async (model: string, prompt: string, temperature?: number) => {
 			setEvents([]);
 			setState("streaming");
 			try {
-				await startReasoningStream(model, prompt, temperature);
+				await startReasoningStream(model, prompt, temperature, streamId);
 			} catch (err) {
-				console.error("[stream-start-error]", err);
+				console.error(`[stream-start-error-${streamId}]`, err);
 				setState("error");
 			}
 		},
-		[],
+		[streamId],
 	);
 
 	const cancel = useCallback(async () => {
 		try {
-			await cancelStream();
+			await cancelStream(streamId);
 		} catch (err) {
-			console.error("[cancel-error]", err);
+			console.error(`[cancel-error-${streamId}]`, err);
 		}
-	}, []);
+	}, [streamId]);
 
 	return { state, events, start, cancel };
 }
