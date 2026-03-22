@@ -43,7 +43,8 @@ impl CotParser {
         events
     }
 
-    /// Feed a response token. Response text is not parsed into graph nodes in Phase 0.
+    /// Feed a response token. Response text is not parsed into graph nodes yet.
+    #[allow(clippy::unused_self)]
     pub fn feed_response(&mut self, _token: &str) -> Vec<ReasoningEvent> {
         // Phase 0: response tokens are not classified.
         // Phase 1+ could emit conclusion events from response text.
@@ -115,7 +116,7 @@ impl CotParser {
             text,
             parent_id,
             target_id,
-            timestamp: self.start_time.elapsed().as_millis() as u64,
+            timestamp: u64::try_from(self.start_time.elapsed().as_millis()).unwrap_or(u64::MAX),
             token_index: self.token_index,
         }
     }

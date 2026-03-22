@@ -3,6 +3,26 @@ use std::path::PathBuf;
 
 use tauri::Manager;
 
+/// Validate session ID to prevent path traversal.
+/// Only allows alphanumeric characters, hyphens, and underscores.
+fn validate_session_id(id: &str) -> Result<(), String> {
+    if id.is_empty() {
+        return Err("Session ID cannot be empty".into());
+    }
+    if id.len() > 128 {
+        return Err("Session ID too long".into());
+    }
+    if !id
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err(format!(
+            "Invalid session ID: contains disallowed characters: {id}"
+        ));
+    }
+    Ok(())
+}
+
 fn sessions_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let base = app
         .path()
@@ -22,6 +42,7 @@ fn index_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 }
 
 pub fn save(app: &tauri::AppHandle, session_json: &str, id: &str) -> Result<(), String> {
+    validate_session_id(id)?;
     let dir = ensure_sessions_dir(app)?;
     let path = dir.join(format!("{id}.json"));
 
@@ -37,12 +58,14 @@ pub fn save(app: &tauri::AppHandle, session_json: &str, id: &str) -> Result<(), 
 }
 
 pub fn load(app: &tauri::AppHandle, id: &str) -> Result<String, String> {
+    validate_session_id(id)?;
     let dir = sessions_dir(app)?;
     let path = dir.join(format!("{id}.json"));
     fs::read_to_string(&path).map_err(|e| format!("Failed to read session {id}: {e}"))
 }
 
 pub fn delete(app: &tauri::AppHandle, id: &str) -> Result<(), String> {
+    validate_session_id(id)?;
     let dir = sessions_dir(app)?;
     let path = dir.join(format!("{id}.json"));
 
@@ -239,5 +262,21 @@ mod tests {
             fs::remove_file(&path).unwrap();
             assert!(!path.exists());
         });
+    }
+
+    #[test]
+    fn test_validate_session_id_rejects_path_traversal() {
+        assert!(validate_session_id("../../etc/passwd").is_err());
+        assert!(validate_session_id("../secret").is_err());
+        assert!(validate_session_id("foo/bar").is_err());
+        assert!(validate_session_id("").is_err());
+        assert!(validate_session_id(&"a".repeat(200)).is_err());
+    }
+
+    #[test]
+    fn test_validate_session_id_accepts_valid_ids() {
+        assert!(validate_session_id("abc-123").is_ok());
+        assert!(validate_session_id("550e8400-e29b-41d4-a716-446655440000").is_ok());
+        assert!(validate_session_id("session_1").is_ok());
     }
 }
