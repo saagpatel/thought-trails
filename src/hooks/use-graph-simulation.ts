@@ -1,5 +1,6 @@
 import * as d3 from "d3";
 import { useEffect, useRef } from "react";
+import { edgeSourceId, edgeTargetId } from "../lib/graph-builder";
 import type { GraphEdge, GraphNode, GraphState } from "../types";
 import { NODE_COLORS, NODE_RADII } from "../types";
 
@@ -13,7 +14,10 @@ export function useGraphSimulation(
 	graphState: GraphState,
 	containerRef: React.RefObject<HTMLDivElement | null>,
 	highlightedNodeIds?: Set<string>,
+	onNodeClick?: (nodeId: string) => void,
 ): { svgRef: React.RefObject<SVGSVGElement | null> } {
+	const onNodeClickRef = useRef(onNodeClick);
+	onNodeClickRef.current = onNodeClick;
 	const svgRef = useRef<SVGSVGElement | null>(null);
 	const simulationRef = useRef<d3.Simulation<
 		GraphNode,
@@ -263,6 +267,11 @@ export function useGraphSimulation(
 		// Tooltip
 		entering.append("title").text((d) => d.text);
 
+		// Click to select
+		entering.on("click", (_event, d) => {
+			onNodeClickRef.current?.(d.id);
+		});
+
 		// Drag
 		if (drag) entering.call(drag);
 
@@ -330,18 +339,6 @@ export function useGraphSimulation(
 function truncate(text: string, maxLen: number): string {
 	if (text.length <= maxLen) return text;
 	return text.slice(0, maxLen - 1) + "\u2026";
-}
-
-function edgeSourceId(edge: GraphEdge): string {
-	return typeof edge.source === "string"
-		? edge.source
-		: (edge.source as unknown as GraphNode).id;
-}
-
-function edgeTargetId(edge: GraphEdge): string {
-	return typeof edge.target === "string"
-		? edge.target
-		: (edge.target as unknown as GraphNode).id;
 }
 
 function debounce<T extends (...args: unknown[]) => void>(

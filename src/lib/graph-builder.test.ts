@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { GraphState, ReasoningEvent } from "../types";
-import { addEvent } from "./graph-builder";
+import {
+	addEvent,
+	filterCollapsed,
+	getAncestors,
+	getChildren,
+	getSubtree,
+} from "./graph-builder";
 
 function makeEvent(
 	overrides: Partial<ReasoningEvent> & { type: ReasoningEvent["type"] },
@@ -217,6 +223,88 @@ describe("graph-builder", () => {
 			}
 
 			expect(state.eventLog).toHaveLength(6);
+		});
+	});
+
+	describe("graph helpers", () => {
+		function buildTestGraph(): GraphState {
+			const events: ReasoningEvent[] = [
+				makeEvent({ type: "claim", id: "c1" }),
+				makeEvent({ type: "evidence", id: "e1", parentId: "c1" }),
+				makeEvent({ type: "evidence", id: "e2", parentId: "c1" }),
+				makeEvent({
+					type: "backtrack",
+					id: "b1",
+					parentId: "c1",
+					targetId: "c1",
+				}),
+				makeEvent({ type: "claim", id: "c2" }),
+				makeEvent({ type: "conclusion", id: "conc1", parentId: "c2" }),
+			];
+			let state = EMPTY_STATE;
+			for (const event of events) {
+				state = addEvent(event, state);
+			}
+			return state;
+		}
+
+		it("getChildren returns direct children of a node", () => {
+			const state = buildTestGraph();
+			const children = getChildren("c1", state);
+
+			expect(children).toHaveLength(3);
+			expect(children).toContain("e1");
+			expect(children).toContain("e2");
+			expect(children).toContain("b1");
+		});
+
+		it("getChildren returns empty for leaf nodes", () => {
+			const state = buildTestGraph();
+			expect(getChildren("e1", state)).toHaveLength(0);
+		});
+
+		it("getAncestors walks the chain to root", () => {
+			const state = buildTestGraph();
+			const ancestors = getAncestors("e1", state);
+
+			expect(ancestors).toHaveLength(1);
+			expect(ancestors[0]?.id).toBe("c1");
+		});
+
+		it("getAncestors returns empty for root nodes", () => {
+			const state = buildTestGraph();
+			expect(getAncestors("c1", state)).toHaveLength(0);
+		});
+
+		it("getSubtree includes all descendants", () => {
+			const state = buildTestGraph();
+			const subtree = getSubtree("c1", state);
+
+			expect(subtree.size).toBe(4); // c1 + e1 + e2 + b1
+			expect(subtree.has("c1")).toBe(true);
+			expect(subtree.has("e1")).toBe(true);
+			expect(subtree.has("e2")).toBe(true);
+			expect(subtree.has("b1")).toBe(true);
+			expect(subtree.has("c2")).toBe(false);
+		});
+
+		it("filterCollapsed removes children of collapsed nodes", () => {
+			const state = buildTestGraph();
+			const collapsed = new Set(["c1"]);
+			const filtered = filterCollapsed(state, collapsed);
+
+			// c1 stays, its 3 children (e1, e2, b1) removed
+			// c2 and conc1 stay
+			expect(filtered.nodes).toHaveLength(3); // c1, c2, conc1
+			expect(filtered.nodes.map((n) => n.id)).toContain("c1");
+			expect(filtered.nodes.map((n) => n.id)).toContain("c2");
+			expect(filtered.nodes.map((n) => n.id)).toContain("conc1");
+
+			// Only edge: conc1 → c2 (the 3 edges to c1's children are removed)
+			expect(filtered.edges).toHaveLength(1);
+
+			// eventLog unchanged
+			expect(filtered.eventLog).toBe(state.eventLog);
 		});
 	});
 });
