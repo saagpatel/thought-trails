@@ -2,34 +2,27 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cancelStream, startReasoningStream } from "../lib/ollama-client";
-import type { StreamStatus } from "../types";
+import type { ReasoningEvent, StreamStatus } from "../types";
 
 type StreamingState = "idle" | "streaming" | "complete" | "error" | "cancelled";
 
 export function useOllamaStream() {
 	const [state, setState] = useState<StreamingState>("idle");
-	const [tokenCount, setTokenCount] = useState(0);
-	const [thinkingText, setThinkingText] = useState("");
-	const [responseText, setResponseText] = useState("");
+	const [events, setEvents] = useState<ReasoningEvent[]>([]);
 	const unlistenRefs = useRef<UnlistenFn[]>([]);
 
 	useEffect(() => {
 		let cancelled = false;
 
 		async function setupListeners() {
-			const unlistenThinking = await listen<string>("raw-thinking", (event) => {
-				if (cancelled) return;
-				console.log("[raw-thinking]", event.payload);
-				setTokenCount((c) => c + 1);
-				setThinkingText((t) => t + event.payload);
-			});
-
-			const unlistenToken = await listen<string>("raw-token", (event) => {
-				if (cancelled) return;
-				console.log("[raw-token]", event.payload);
-				setTokenCount((c) => c + 1);
-				setResponseText((t) => t + event.payload);
-			});
+			const unlistenEvent = await listen<ReasoningEvent>(
+				"reasoning-event",
+				(event) => {
+					if (cancelled) return;
+					console.log("[reasoning-event]", event.payload);
+					setEvents((prev) => [...prev, event.payload]);
+				},
+			);
 
 			const unlistenComplete = await listen<StreamStatus>(
 				"stream-complete",
@@ -52,15 +45,9 @@ export function useOllamaStream() {
 			);
 
 			if (!cancelled) {
-				unlistenRefs.current = [
-					unlistenThinking,
-					unlistenToken,
-					unlistenComplete,
-					unlistenError,
-				];
+				unlistenRefs.current = [unlistenEvent, unlistenComplete, unlistenError];
 			} else {
-				unlistenThinking();
-				unlistenToken();
+				unlistenEvent();
 				unlistenComplete();
 				unlistenError();
 			}
@@ -78,9 +65,7 @@ export function useOllamaStream() {
 	}, []);
 
 	const start = useCallback(async (model: string, prompt: string) => {
-		setTokenCount(0);
-		setThinkingText("");
-		setResponseText("");
+		setEvents([]);
 		setState("streaming");
 		try {
 			await startReasoningStream(model, prompt);
@@ -98,5 +83,5 @@ export function useOllamaStream() {
 		}
 	}, []);
 
-	return { state, tokenCount, thinkingText, responseText, start, cancel };
+	return { state, events, start, cancel };
 }

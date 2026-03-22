@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use tauri::Emitter;
 use tokio_util::sync::CancellationToken;
 
+use crate::cot_parser::CotParser;
 use crate::ollama;
 use crate::types::{StreamState, StreamStatus};
 
@@ -41,9 +42,16 @@ pub async fn start_reasoning_stream(
     let mut rx = ollama::generate_stream(model, prompt).await?;
 
     tokio::spawn(async move {
+        let mut parser = CotParser::new();
+        let mut thinking_finished = false;
+
         loop {
             tokio::select! {
                 _ = cancel_token.cancelled() => {
+                    // Flush any buffered parser state before cancelling
+                    for event in parser.finish() {
+                        let _ = app.emit("reasoning-event", &event);
+                    }
                     let _ = app.emit("stream-complete", StreamStatus {
                         state: StreamState::Cancelled,
                         message: "Stream cancelled by user".into(),
@@ -53,17 +61,32 @@ pub async fn start_reasoning_stream(
                 chunk = rx.recv() => {
                     match chunk {
                         Some(Ok(c)) => {
-                            // Phase 0: emit raw tokens — parser wiring comes in Session 2
-                            // DeepSeek-R1 sends thinking in a separate field
+                            // Feed thinking tokens to parser
                             if let Some(ref thinking) = c.thinking {
                                 if !thinking.is_empty() {
-                                    let _ = app.emit("raw-thinking", thinking);
+                                    for event in parser.feed_thinking(thinking) {
+                                        let _ = app.emit("reasoning-event", &event);
+                                    }
                                 }
                             }
+
+                            // Transition: first response token ends thinking phase
                             if !c.response.is_empty() {
-                                let _ = app.emit("raw-token", &c.response);
+                                if !thinking_finished {
+                                    for event in parser.finish_thinking() {
+                                        let _ = app.emit("reasoning-event", &event);
+                                    }
+                                    thinking_finished = true;
+                                }
+                                for event in parser.feed_response(&c.response) {
+                                    let _ = app.emit("reasoning-event", &event);
+                                }
                             }
+
                             if c.done {
+                                for event in parser.finish() {
+                                    let _ = app.emit("reasoning-event", &event);
+                                }
                                 let _ = app.emit("stream-complete", StreamStatus {
                                     state: StreamState::Complete,
                                     message: "done".into(),
@@ -79,6 +102,9 @@ pub async fn start_reasoning_stream(
                             break;
                         }
                         None => {
+                            for event in parser.finish() {
+                                let _ = app.emit("reasoning-event", &event);
+                            }
                             let _ = app.emit("stream-complete", StreamStatus {
                                 state: StreamState::Complete,
                                 message: "Stream ended".into(),

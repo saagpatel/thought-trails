@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 mod commands;
+mod cot_parser;
 mod ollama;
 mod spike;
 mod types;
