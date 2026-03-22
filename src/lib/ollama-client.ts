@@ -11,8 +11,9 @@ export async function checkOllamaHealth(): Promise<boolean> {
 export async function startReasoningStream(
 	model: string,
 	prompt: string,
+	temperature?: number,
 ): Promise<void> {
-	return invoke("start_reasoning_stream", { model, prompt });
+	return invoke("start_reasoning_stream", { model, prompt, temperature });
 }
 
 export async function cancelStream(): Promise<void> {

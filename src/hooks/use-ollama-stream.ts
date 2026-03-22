@@ -64,16 +64,19 @@ export function useOllamaStream() {
 		};
 	}, []);
 
-	const start = useCallback(async (model: string, prompt: string) => {
-		setEvents([]);
-		setState("streaming");
-		try {
-			await startReasoningStream(model, prompt);
-		} catch (err) {
-			console.error("[stream-start-error]", err);
-			setState("error");
-		}
-	}, []);
+	const start = useCallback(
+		async (model: string, prompt: string, temperature?: number) => {
+			setEvents([]);
+			setState("streaming");
+			try {
+				await startReasoningStream(model, prompt, temperature);
+			} catch (err) {
+				console.error("[stream-start-error]", err);
+				setState("error");
+			}
+		},
+		[],
+	);
 
 	const cancel = useCallback(async () => {
 		try {

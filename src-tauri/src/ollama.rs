@@ -46,14 +46,18 @@ pub async fn list_models() -> Result<Vec<String>, String> {
 pub async fn generate_stream(
     model: String,
     prompt: String,
+    temperature: Option<f64>,
 ) -> Result<mpsc::Receiver<Result<OllamaChunk, String>>, String> {
     let url = format!("{OLLAMA_BASE_URL}/api/generate");
 
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "model": model,
         "prompt": prompt,
         "stream": true
     });
+    if let Some(temp) = temperature {
+        body["options"] = serde_json::json!({ "temperature": temp });
+    }
 
     let resp = Client::builder()
         .build()

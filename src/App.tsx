@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GraphCanvas } from "./components/graph-canvas";
+import { PromptPanel } from "./components/prompt-panel";
 import { ReplayControls } from "./components/replay-controls";
 import { StatusBar } from "./components/status-bar";
+import { WindowControls } from "./components/window-controls";
 import { useOllamaStream } from "./hooks/use-ollama-stream";
 import { useReplay } from "./hooks/use-replay";
 import { exportJson, exportSvg } from "./lib/exporter";
@@ -13,37 +15,37 @@ import { NODE_COLORS } from "./types";
 const EMPTY_GRAPH: GraphState = { nodes: [], edges: [], eventLog: [] };
 
 export function App() {
-	const [prompt, setPrompt] = useState("");
 	const [models, setModels] = useState<string[]>([]);
 	const [selectedModel, setSelectedModel] = useState("");
-	const textareaRef = useRef<HTMLTextAreaElement>(null);
+	const [lastPrompt, setLastPrompt] = useState("");
 	const svgElRef = useRef<SVGSVGElement | null>(null);
 	const { state, events, start, cancel } = useOllamaStream();
 
-	useEffect(() => {
+	const refreshModels = useCallback(() => {
 		listOllamaModels()
 			.then((m) => {
 				setModels(m);
-				if (m.length > 0 && m[0]) setSelectedModel(m[0]);
+				if (m.length > 0 && !m.includes(selectedModel) && m[0]) {
+					setSelectedModel(m[0]);
+				}
 			})
 			.catch(() => {
 				/* StatusBar handles error display */
 			});
+	}, [selectedModel]);
+
+	useEffect(() => {
+		refreshModels();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
-	const handleSubmit = useCallback(() => {
-		if (!prompt.trim() || !selectedModel || state === "streaming") return;
-		start(selectedModel, prompt.trim());
-	}, [prompt, selectedModel, state, start]);
-
-	const handleKeyDown = useCallback(
-		(e: React.KeyboardEvent) => {
-			if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-				e.preventDefault();
-				handleSubmit();
-			}
+	const handleSubmit = useCallback(
+		(prompt: string, temperature: number) => {
+			if (!selectedModel || state === "streaming") return;
+			setLastPrompt(prompt);
+			start(selectedModel, prompt, temperature);
 		},
-		[handleSubmit],
+		[selectedModel, state, start],
 	);
 
 	// Build full graph state from live events
@@ -55,11 +57,11 @@ export function App() {
 		return gs;
 	}, [events]);
 
-	// Replay hook — operates on the full event log
+	// Replay hook
 	const replay = useReplay(liveGraphState.eventLog);
 	const isReplaying = replay.replayState !== "idle";
 
-	// When replaying, build graph from replay events; otherwise use live
+	// Display graph: replay events when replaying, live otherwise
 	const displayGraphState = useMemo(() => {
 		if (!isReplaying) return liveGraphState;
 		let gs = EMPTY_GRAPH;
@@ -84,7 +86,6 @@ export function App() {
 	const canExport = nodeCount > 0 && state !== "streaming";
 	const canReplay = state === "complete" && liveGraphState.eventLog.length > 0;
 
-	// Export handlers
 	const handleExportSvg = useCallback(() => {
 		if (!svgElRef.current) return;
 		const ts = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
@@ -97,56 +98,30 @@ export function App() {
 			displayGraphState,
 			{
 				model: selectedModel,
-				prompt,
+				prompt: lastPrompt,
 				timestamp: Date.now(),
 			},
 			`thought-trails-${ts}.json`,
 		);
-	}, [displayGraphState, selectedModel, prompt]);
+	}, [displayGraphState, selectedModel, lastPrompt]);
 
 	return (
 		<div className="flex h-screen flex-col bg-neutral-950 text-neutral-100">
-			{/* Prompt input */}
-			<div className="shrink-0 border-b border-neutral-800 p-3">
-				<div className="mx-auto flex max-w-4xl gap-3">
-					<select
-						value={selectedModel}
-						onChange={(e) => setSelectedModel(e.target.value)}
-						className="rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-200"
-					>
-						{models.map((m) => (
-							<option key={m} value={m}>
-								{m}
-							</option>
-						))}
-					</select>
-					<textarea
-						ref={textareaRef}
-						value={prompt}
-						onChange={(e) => setPrompt(e.target.value)}
-						onKeyDown={handleKeyDown}
-						placeholder="Enter a prompt... (Cmd+Enter to submit)"
-						rows={1}
-						className="flex-1 resize-none rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-200 placeholder-neutral-600 focus:border-blue-500 focus:outline-none"
+			{/* Window controls + Prompt panel */}
+			<div className="flex shrink-0 items-start gap-3 border-b border-neutral-800">
+				<div className="flex items-center py-4 pl-3">
+					<WindowControls />
+				</div>
+				<div className="flex-1">
+					<PromptPanel
+						models={models}
+						selectedModel={selectedModel}
+						onModelChange={setSelectedModel}
+						onRefreshModels={refreshModels}
+						isStreaming={state === "streaming"}
+						onSubmit={handleSubmit}
+						onCancel={cancel}
 					/>
-					{state === "streaming" ? (
-						<button
-							onClick={cancel}
-							type="button"
-							className="rounded bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-500"
-						>
-							Cancel
-						</button>
-					) : (
-						<button
-							onClick={handleSubmit}
-							type="button"
-							disabled={!prompt.trim() || !selectedModel}
-							className="rounded bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-500 disabled:opacity-40"
-						>
-							Send
-						</button>
-					)}
 				</div>
 			</div>
 
@@ -187,7 +162,7 @@ export function App() {
 
 				{/* Export buttons */}
 				{canExport && (
-					<div className="absolute right-4 bottom-12 flex gap-2">
+					<div className="absolute bottom-12 right-4 flex gap-2">
 						<button
 							type="button"
 							onClick={handleExportSvg}
@@ -205,12 +180,16 @@ export function App() {
 					</div>
 				)}
 
-				{/* Idle state hint */}
+				{/* Idle state */}
 				{state === "idle" && nodeCount === 0 && (
-					<div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-						<p className="text-neutral-600">
-							Enter a prompt above to visualize reasoning
+					<div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2">
+						<p className="text-lg font-light tracking-wide text-neutral-500">
+							thought-trails
 						</p>
+						<p className="text-sm text-neutral-600">
+							Submit a prompt to visualize LLM reasoning
+						</p>
+						<p className="text-xs text-neutral-700">Cmd+Enter to submit</p>
 					</div>
 				)}
 

@@ -25,6 +25,7 @@ pub async fn start_reasoning_stream(
     state: tauri::State<'_, ActiveStream>,
     model: String,
     prompt: String,
+    temperature: Option<f64>,
 ) -> Result<(), String> {
     // Cancel any existing stream
     if let Ok(mut guard) = state.0.lock() {
@@ -39,7 +40,7 @@ pub async fn start_reasoning_stream(
         *guard = Some(cancel_token.clone());
     }
 
-    let mut rx = ollama::generate_stream(model, prompt).await?;
+    let mut rx = ollama::generate_stream(model, prompt, temperature).await?;
 
     tokio::spawn(async move {
         let mut parser = CotParser::new();
