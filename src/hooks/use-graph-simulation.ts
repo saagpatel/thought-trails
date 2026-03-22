@@ -12,6 +12,7 @@ const EDGE_COLORS: Record<GraphEdge["type"], string> = {
 export function useGraphSimulation(
 	graphState: GraphState,
 	containerRef: React.RefObject<HTMLDivElement | null>,
+	highlightedNodeIds?: Set<string>,
 ): { svgRef: React.RefObject<SVGSVGElement | null> } {
 	const svgRef = useRef<SVGSVGElement | null>(null);
 	const simulationRef = useRef<d3.Simulation<
@@ -284,6 +285,42 @@ export function useGraphSimulation(
 			.text((d) => truncate(d.text, 40));
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [graphState.nodes.length, graphState.edges.length]);
+
+	// Highlight matching nodes (for search)
+	useEffect(() => {
+		const zoomGroup = zoomGroupRef.current;
+		if (!zoomGroup) return;
+
+		const hasHighlight = highlightedNodeIds && highlightedNodeIds.size > 0;
+
+		zoomGroup
+			.select(".nodes")
+			.selectAll<SVGCircleElement, GraphNode>("circle")
+			.attr("opacity", (d) => {
+				if (!hasHighlight) return 1;
+				return highlightedNodeIds.has(d.id) ? 1 : 0.15;
+			})
+			.attr("stroke-width", (d) => {
+				if (!hasHighlight) return 1.5;
+				return highlightedNodeIds.has(d.id) ? 3 : 1.5;
+			});
+
+		zoomGroup
+			.select(".edges")
+			.selectAll<SVGLineElement, GraphEdge>("line")
+			.attr("stroke-opacity", () => {
+				if (!hasHighlight) return 0.6;
+				return 0.05;
+			});
+
+		zoomGroup
+			.select(".labels")
+			.selectAll<SVGTextElement, GraphNode>("text")
+			.attr("opacity", (d) => {
+				if (!hasHighlight) return zoomScaleRef.current > 1.5 ? 1 : 0;
+				return highlightedNodeIds.has(d.id) ? 1 : 0;
+			});
+	}, [highlightedNodeIds]);
 
 	return { svgRef };
 }
