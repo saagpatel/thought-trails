@@ -1,7 +1,7 @@
 {
 	"productName": "thought-trails",
 	"version": "0.1.0",
-	"identifier": "com.thoughttrails.app",
+	"identifier": "com.thoughttrails.desktop",
 	"build": {
 		"beforeDevCommand": "npm run dev",
 		"beforeBuildCommand": "npm run build",

@@ -43,7 +43,6 @@ pub struct StreamStatus {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum StreamState {
-    Streaming,
     Complete,
     Error,
     Cancelled,
