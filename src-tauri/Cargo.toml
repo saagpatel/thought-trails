@@ -1,6 +1,6 @@
 [package]
 name = "thought-trails"
-version = "0.1.0"
+version = "1.0.0"
 description = "Visualize LLM chain-of-thought as a force-directed graph"
 authors = ["you"]
 edition = "2021"
