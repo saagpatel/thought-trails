@@ -41,3 +41,52 @@ npm run tauri build
 ## Known Issues
 - CoT parsing quality is heuristic — edge cases in non-DeepSeek-R1 model outputs may produce noisy graphs
 - Replay mode timing is fixed-interval; no variable-speed playback
+
+<!-- portfolio-context:start -->
+# Portfolio Context
+
+## What This Project Is
+
+thought-trails is a local Tauri desktop app that turns a model's streamed chain-of-thought-style output into an inspectable graph. It connects to Ollama, parses reasoning spans into typed nodes, renders the graph live with D3, and supports replay, export, search, session history, and multi-model comparison for local reasoning analysis.
+
+## Current State
+
+Feature-complete. All planned phases shipped:
+- Phase 0: Spike + data pipeline — CoT heuristic parser, Ollama streaming, live D3 force graph
+- Phase 1: Replay mode, SVG/JSON export, frameless window, temperature support
+- Phase 2: Session persistence with auto-save, session sidebar, graph search with node highlighting
+- Phase 3: Node detail panel with ancestry trace, collapsible subtrees, tree layout mode
+- Phase 4: Multi-model comparison view, dual-stream support with stream ID disambiguation
+- Hardening: session ID path traversal fix, clippy cleanup
+
+## Stack
+
+- **Rust**: 1.77+ (Tauri backend, streaming HTTP via reqwest)
+- **Tauri**: 2.0 (desktop shell, event bridge, frameless window)
+- **React**: 18.x (frontend framework, hooks only)
+- **TypeScript**: 5.x (strict mode)
+- **D3.js**: 7.x (force-directed graph + tree layout rendering)
+- **Vite**: 5.x (frontend bundler)
+- **Ollama**: localhost:11434 (local LLM inference — not bundled, must be pre-installed)
+
+## How To Run
+
+```bash
+# Requires Ollama running at localhost:11434
+npm install
+npm run tauri dev
+
+# Production build
+npm run tauri build
+```
+
+## Known Risks
+
+- CoT parsing quality is heuristic — edge cases in non-DeepSeek-R1 model outputs may produce noisy graphs
+- Replay mode timing is fixed-interval; no variable-speed playback
+
+## Next Recommended Move
+
+Use this context plus the README and supporting docs to resume the next active task, then promote the repo beyond minimum-viable by capturing a dedicated handoff, roadmap, or discovery artifact.
+
+<!-- portfolio-context:end -->
