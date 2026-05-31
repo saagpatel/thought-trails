@@ -8,7 +8,7 @@ A local-first Tauri 2.0 desktop app that visualizes a local LLM's chain-of-thoug
 - **React**: 18.x (frontend framework, hooks only)
 - **TypeScript**: 5.x (strict mode)
 - **D3.js**: 7.x (force-directed graph + tree layout rendering)
-- **Vite**: 5.x (frontend bundler)
+- **Vite**: 6.x (frontend bundler)
 - **Ollama**: localhost:11434 (local LLM inference — not bundled, must be pre-installed)
 
 ## Status
@@ -40,7 +40,6 @@ npm run tauri build
 
 ## Known Issues
 - CoT parsing quality is heuristic — edge cases in non-DeepSeek-R1 model outputs may produce noisy graphs
-- Replay mode timing is fixed-interval; no variable-speed playback
 
 <!-- portfolio-context:start -->
 # Portfolio Context
@@ -66,7 +65,7 @@ Feature-complete. All planned phases shipped:
 - **React**: 18.x (frontend framework, hooks only)
 - **TypeScript**: 5.x (strict mode)
 - **D3.js**: 7.x (force-directed graph + tree layout rendering)
-- **Vite**: 5.x (frontend bundler)
+- **Vite**: 6.x (frontend bundler)
 - **Ollama**: localhost:11434 (local LLM inference — not bundled, must be pre-installed)
 
 ## How To Run
@@ -83,7 +82,6 @@ npm run tauri build
 ## Known Risks
 
 - CoT parsing quality is heuristic — edge cases in non-DeepSeek-R1 model outputs may produce noisy graphs
-- Replay mode timing is fixed-interval; no variable-speed playback
 
 ## Next Recommended Move
 
