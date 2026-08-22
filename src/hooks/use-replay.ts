@@ -12,7 +12,7 @@ export function useReplay(fullEventLog: ReasoningEvent[]) {
 	const [replayEvents, setReplayEvents] = useState<ReasoningEvent[]>([]);
 	const [replaySpeed, setReplaySpeedState] = useState<ReplaySpeed>(1);
 
-	const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+	const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 	const currentIndexRef = useRef(0);
 	const speedRef = useRef<ReplaySpeed>(1);
 
