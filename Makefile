@@ -1,19 +1,17 @@
-.PHONY: dev build test lint clean install
+.PHONY: dev build test clean install
 
+# npm project (package-lock.json). There is no lint script in package.json.
 install:
-	pnpm install
+	npm ci --ignore-scripts
 
 dev:
-	pnpm dev
+	npm run tauri dev
 
 build:
-	pnpm build
+	npm run build
 
 test:
-	pnpm test
-
-lint:
-	pnpm lint
+	npm test
 
 clean:
-	rm -rf node_modules dist .next .turbo
+	rm -rf node_modules dist
