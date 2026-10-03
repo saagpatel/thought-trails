@@ -3,12 +3,12 @@
 A local-first Tauri 2.0 desktop app that visualizes a local LLM's chain-of-thought reasoning as a live, interactive D3.js graph. Connects to Ollama, streams `<think>` token blocks in real time, and renders reasoning as explorable nodes — claims, evidence, backtracks, conclusions. Supports multi-model side-by-side comparison, collapsible subtrees, tree layout mode, session persistence, and SVG/JSON export. No cloud, no API keys required.
 
 ## Tech Stack
-- **Rust**: 1.77+ (Tauri backend, streaming HTTP via reqwest)
+- **Rust**: stable toolchain, no `rust-version` pinned in `src-tauri/Cargo.toml` (Tauri backend, streaming HTTP via reqwest)
 - **Tauri**: 2.0 (desktop shell, event bridge, frameless window)
-- **React**: 18.x (frontend framework, hooks only)
-- **TypeScript**: 5.x (strict mode)
+- **React**: 19.3 (frontend framework, hooks only)
+- **TypeScript**: 7.0 (strict mode)
 - **D3.js**: 7.x (force-directed graph + tree layout rendering)
-- **Vite**: 6.x (frontend bundler)
+- **Vite**: 8.3 (frontend bundler); Tailwind CSS 4, Vitest 5
 - **Ollama**: localhost:11434 (local LLM inference — not bundled, must be pre-installed)
 
 ## Status
@@ -23,7 +23,7 @@ Feature-complete. All planned phases shipped:
 ## Build & Run
 ```bash
 # Requires Ollama running at localhost:11434
-npm install
+npm ci --ignore-scripts   # package-lock.json is the lockfile
 npm run tauri dev
 
 # Production build
@@ -34,7 +34,7 @@ npm run tauri build
 - `src-tauri/src/` — Rust backend: Ollama streaming commands, session persistence, event bridge
 - `src/components/` — React UI: graph canvas, prompt panel, session sidebar, model comparison
 - `src/lib/` — CoT heuristic parser, D3 graph builder, Tauri typed wrappers
-- D3 force simulation with incremental node addition via Tauri `emit_all` events
+- D3 force simulation with incremental node addition via Tauri 2 `app.emit` events
 - Sessions stored to disk via Tauri app data directory; auto-saved on each node addition
 - Multi-model comparison runs two parallel streams with stream ID disambiguation
 
@@ -60,19 +60,19 @@ Feature-complete. All planned phases shipped:
 
 ## Stack
 
-- **Rust**: 1.77+ (Tauri backend, streaming HTTP via reqwest)
+- **Rust**: stable toolchain, no `rust-version` pinned in `src-tauri/Cargo.toml` (Tauri backend, streaming HTTP via reqwest)
 - **Tauri**: 2.0 (desktop shell, event bridge, frameless window)
-- **React**: 18.x (frontend framework, hooks only)
-- **TypeScript**: 5.x (strict mode)
+- **React**: 19.3 (frontend framework, hooks only)
+- **TypeScript**: 7.0 (strict mode)
 - **D3.js**: 7.x (force-directed graph + tree layout rendering)
-- **Vite**: 6.x (frontend bundler)
+- **Vite**: 8.3 (frontend bundler); Tailwind CSS 4, Vitest 5
 - **Ollama**: localhost:11434 (local LLM inference — not bundled, must be pre-installed)
 
 ## How To Run
 
 ```bash
 # Requires Ollama running at localhost:11434
-npm install
+npm ci --ignore-scripts   # package-lock.json is the lockfile
 npm run tauri dev
 
 # Production build
