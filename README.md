@@ -21,9 +21,8 @@ thought-trails connects to a local Ollama instance, streams reasoning tokens in 
 ### Prerequisites
 
 - Rust stable toolchain (via [rustup](https://rustup.rs))
-- Node.js 20+
-- [Ollama](https://ollama.com) running locally on port 11434
-- A reasoning model pulled, e.g. `ollama pull deepseek-r1:14b`
+- Node.js 22 (22.12 or newer) and npm (`package-lock.json` is the frontend lockfile)
+- For interactive model runs only: [Ollama](https://ollama.com) running locally on port 11434 and a reasoning model already pulled (for example `deepseek-r1:14b`)
 - macOS (built as a native macOS desktop app)
 
 ### Installation
@@ -31,7 +30,7 @@ thought-trails connects to a local Ollama instance, streams reasoning tokens in 
 ```bash
 git clone https://github.com/saagpatel/thought-trails.git
 cd thought-trails
-npm install
+npm ci --ignore-scripts
 ```
 
 ### Usage
@@ -49,6 +48,27 @@ npm test
 # Production build
 npm run tauri build
 ```
+
+## Verification
+
+From the repository root after the locked install:
+
+```bash
+# Focused, deterministic graph fixture tests (no Ollama or desktop needed)
+npm test -- src/lib/graph-builder.test.ts
+# All frontend tests
+npm test
+# TypeScript check and production frontend build
+npm run build
+# Rust parser/session tests; requires Rust and Tauri platform build prerequisites
+cargo test --locked --manifest-path src-tauri/Cargo.toml
+# Narrow Rust parser lane
+cargo test --locked --manifest-path src-tauri/Cargo.toml cot_parser::tests
+```
+
+The Rust tests exercise in-memory parser/session fixtures, not a live Ollama call. Dependency installation/builds may download packages and write local caches, `dist/`, Rust `target/`, or generated Tauri schemas; use an isolated checkout. There is no repository lint/format script or browser E2E suite, so do not report those as passed. `npm run tauri build` packages the desktop app; `npm run build` builds only its frontend.
+
+For changed UI, inspect the affected view, keyboard interactions, graph layout, and export behavior at desktop and narrow sizes. `npm run dev -- --host 127.0.0.1` serves the browser frontend, but real IPC/model streaming needs `npm run tauri dev` and Ollama. Use a disposable test session and synthetic prompts: desktop runs persist session history and model requests contact the local service. Capture the changed surface; a frontend fixture or browser shell alone does not prove real model streaming or desktop persistence. Pure documentation edits do not require this interactive lane.
 
 ## Tech Stack
 
