@@ -21,7 +21,7 @@ thought-trails connects to a local Ollama instance, streams reasoning tokens in 
 ### Prerequisites
 
 - Rust stable toolchain (via [rustup](https://rustup.rs))
-- Node.js 22 (22.12 or newer) and npm (`package-lock.json` is the frontend lockfile)
+- Node.js 22 (22.13 or newer) and npm (`package-lock.json` is the frontend lockfile)
 - For interactive model runs only: [Ollama](https://ollama.com) running locally on port 11434 and a reasoning model already pulled (for example `deepseek-r1:14b`)
 - macOS (built as a native macOS desktop app)
 
